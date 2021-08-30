@@ -1,0 +1,260 @@
+service: ${self:custom.projectFullName}
+frameworkVersion: '2'
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: python3.8
+  lambdaHashingVersion: 20201221
+  profile: serverlessUser #NO BTG
+  region: us-east-2 #NO BTG
+  stackTags:
+    Ambiente: ${self:custom.stage}
+    Criticidad: ALTA
+    Disponibilidad: 7x24
+    Nube: AWS
+    Owner: Daniel Franco
+    Plataforma: Serverless Framework
+    Proyecto: ${self:custom.project}
+    Rol: Integracion
+    Tecnologia: Serverless
+    Integracion: ${self:custom.integrationName}
+
+custom:
+  stage: ${env:stage, "dev"}
+  project: ${env:project}
+  integrationName: ${env:integrationName}
+  projectFullName: ${self:custom.project}-${self:custom.integrationName}
+  registerTableV2: ddb-${self:custom.projectFullName}-${self:custom.stage}-registerTableV2
+  seguimientoTableV2: ddb-${self:custom.projectFullName}-${self:custom.stage}-seguimientoTableV2
+  basePath: ${env:basePath}
+
+functions:
+  registarCaso:
+    name: func-${self:custom.projectFullName}-${self:custom.stage}-registarCaso
+    handler: handler.registarCaso
+    role: registarCasoRole
+    environment:
+      REGISTRARCASO_TABLE: ${self:custom.registerTableV2}
+    package:
+      patterns: 
+        - handler.py
+    events:
+      - http:
+          path: ${self:custom.basePath}/registarCaso
+          method: POST
+          cors: true #NO BTG
+  listarCasos:
+    name: func-${self:custom.projectFullName}-${self:custom.stage}-listarCasos
+    handler: handler.listarCasos
+    role: listarCasosRole
+    environment:
+      REGISTRARCASO_TABLE: ${self:custom.registerTableV2}
+    package:
+      patterns: 
+        - handler.py
+    events:
+      - http:
+          path: ${self:custom.basePath}/listarCasos
+          method: GET
+          cors: true #NO BTG
+  registrarRespuesta:
+    name: func-${self:custom.projectFullName}-${self:custom.stage}-registrarRespuesta
+    handler: handler.registrarRespuesta
+    role: registrarRespuestaRole
+    environment:
+      SEGUIMIENTOCASO_TABLE: ${self:custom.seguimientoTableV2}
+    package:
+      patterns: 
+        - handler.py
+    events:
+      - http:
+          path: ${self:custom.basePath}/registrarRespuesta
+          method: POST
+          cors: true #NO BTG
+  listarRespuesta:
+    name: func-${self:custom.projectFullName}-${self:custom.stage}-listarRespuesta
+    handler: handler.listarRespuesta
+    role: listarRespuestaRole
+    environment:
+      SEGUIMIENTOCASO_TABLE: ${self:custom.seguimientoTableV2}
+    package:
+      patterns: 
+        - handler.py
+    events:
+      - http:
+          path: ${self:custom.basePath}/listarRespuesta
+          method: GET
+          cors: true #NO BTG
+
+package:
+  individually: true
+
+resources:
+  Resources:
+    registarCasoRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: 'Lambda Role'
+        ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Path: /
+        Policies:
+          - PolicyName: 'register-caso-dynamodb-policy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - Fn::GetAtt: [ registarCasoRoleTable, Arn ]
+        RoleName: iam-${self:custom.projectFullName}-${self:custom.stage}-registarCasoRole
+        Tags: 
+          - Key: Name
+            Value: iam-${self:custom.projectFullName}-${self:custom.stage}-registarCasoRole
+    registarCasoRoleTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.registerTableV2}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    listarCasosRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: 'Lambda Role'
+        ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Path: /
+        Policies:
+          - PolicyName: 'listar-caso-dynamodb-policy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - Fn::GetAtt: [ registarCasoRoleTable, Arn ]
+        RoleName: iam-${self:custom.projectFullName}-${self:custom.stage}-listarCasosRole
+        Tags: 
+          - Key: Name
+            Value: iam-${self:custom.projectFullName}-${self:custom.stage}-listarCasosRole
+    registrarRespuestaRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: 'Lambda Role'
+        ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Path: /
+        Policies:
+          - PolicyName: 'register-respuesta-dynamodb-policy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - Fn::GetAtt: [ registarRespuestaRoleTable, Arn ]
+        RoleName: iam-${self:custom.projectFullName}-${self:custom.stage}-registrarRespuestaRole
+        Tags: 
+          - Key: Name
+            Value: iam-${self:custom.projectFullName}-${self:custom.stage}-registrarRespuestaRole
+    registarRespuestaRoleTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.seguimientoTableV2}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    listarRespuestaRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: 'Lambda Role'
+        ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Path: /
+        Policies:
+          - PolicyName: 'listar-respuesta-dynamodb-policy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - Fn::GetAtt: [ registarRespuestaRoleTable, Arn ]
+        RoleName: iam-${self:custom.projectFullName}-${self:custom.stage}-listarRespuestaRole
+        Tags: 
+          - Key: Name
+            Value: iam-${self:custom.projectFullName}-${self:custom.stage}-listarRespuestaRole
